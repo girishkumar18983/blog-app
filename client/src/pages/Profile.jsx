@@ -5,6 +5,7 @@ import { HiOutlineUserPlus, HiOutlineUsers, HiOutlineMagnifyingGlass, HiOutlineC
 
 function Profile() {
   const { user, updateUser } = useAuth();
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
   const [profile, setProfile] = useState(null);
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -24,7 +25,7 @@ function Profile() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const { data } = await axios.get(`http://localhost:5000/api/users/${user._id}`);
+        const { data } = await axios.get(`${API_URL}/api/users/${user._id}`);
         setProfile(data);
         setProfileForm({
           name: data.name || '',
@@ -44,7 +45,7 @@ function Profile() {
     e.preventDefault();
     if (!search.trim()) return;
     try {
-      const { data } = await axios.get(`http://localhost:5000/api/users?username=${search}`);
+      const { data } = await axios.get(`${API_URL}/api/users?username=${search}`);
       // Filter out self and current friends
       const filtered = data.filter(u => u._id !== user._id && !profile.friends.some(f => f._id === u._id));
       setSearchResults(filtered);
@@ -56,10 +57,10 @@ function Profile() {
   const addFriend = async (friendId) => {
     try {
       const config = { headers: { Authorization: `Bearer ${user.token}` } };
-      await axios.post(`http://localhost:5000/api/users/add-friend/${friendId}`, {}, config);
+      await axios.post(`${API_URL}/api/users/add-friend/${friendId}`, {}, config);
       setMessage('Friend added!');
       // Refresh profile
-      const { data } = await axios.get(`http://localhost:5000/api/users/${user._id}`);
+      const { data } = await axios.get(`${API_URL}/api/users/${user._id}`);
       setProfile(data);
       setSearchResults(prev => prev.filter(u => u._id !== friendId));
       setTimeout(() => setMessage(''), 3000);
@@ -88,7 +89,7 @@ function Profile() {
     
     try {
       const config = { headers: { Authorization: `Bearer ${user.token}` } };
-      const { data } = await axios.put(`http://localhost:5000/api/users/profile/${user._id}`, profileForm, config);
+      const { data } = await axios.put(`${API_URL}/api/users/profile/${user._id}`, profileForm, config);
       
       setProfile({ ...profile, name: data.name, bio: data.bio, avatar: data.avatar });
       setProfileMessage({ text: 'Profile successfully updated!', type: 'success' });
@@ -107,7 +108,7 @@ function Profile() {
     setSettingsMessage({ text: '', type: '' });
     
     try {
-      const { data } = await axios.put('http://localhost:5000/api/auth/username', {
+      const { data } = await axios.put(`${API_URL}/api/auth/username`, {
         userId: user._id,
         newUsername: newUsername.trim()
       });
