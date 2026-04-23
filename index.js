@@ -26,16 +26,22 @@ app.get('/', (req, res) => {
   res.json({ message: 'Blog API is running' });
 });
 
-// Connect to MongoDB and start server
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => {
-    console.log('✅ Connected to MongoDB');
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running on http://localhost:${PORT}`);
+// Start server first so Render detects the open port
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+});
+
+// Connect to MongoDB without crashing the server if it fails
+if (!process.env.MONGO_URI) {
+  console.error('❌ MONGO_URI environment variable is missing!');
+} else {
+  mongoose
+    .connect(process.env.MONGO_URI)
+    .then(() => {
+      console.log('✅ Connected to MongoDB');
+    })
+    .catch((err) => {
+      console.error('❌ MongoDB connection error:', err.message);
+      // Removed process.exit(1) so the app stays alive for Render health checks
     });
-  })
-  .catch((err) => {
-    console.error('❌ MongoDB connection error:', err.message);
-    process.exit(1);
-  });
+}
