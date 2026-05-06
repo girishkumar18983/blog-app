@@ -1,6 +1,16 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+// Safer URL detection
+const getApiUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && envUrl.trim() !== '') {
+    return envUrl.trim().endsWith('/') ? envUrl.trim().slice(0, -1) : envUrl.trim();
+  }
+  return 'http://localhost:5000';
+};
+
+const API_URL = getApiUrl();
+console.log('📡 API Base URL:', API_URL);
 
 const API = axios.create({
   baseURL: `${API_URL}/api/posts`,

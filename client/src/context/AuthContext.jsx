@@ -8,6 +8,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  console.log('🔐 Auth API URL:', API_URL);
 
   useEffect(() => {
     // Check if user is authenticated via session on mount
