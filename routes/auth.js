@@ -8,13 +8,16 @@ router.get('/login', passport.authenticate('appid'));
 // GET /api/auth/callback — IBM App ID Callback
 router.get('/callback', (req, res, next) => {
   passport.authenticate('appid', (err, user, info) => {
+    // Production frontend fallback
+    const frontendUrl = process.env.FRONTEND_URL || 'https://blog-pg57fwahn-girishkumar18983s-projects.vercel.app';
+    
     if (err) {
       console.error('❌ Passport Auth Error:', err);
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=auth_failed`);
+      return res.redirect(`${frontendUrl}/login?error=auth_failed`);
     }
     if (!user) {
       console.error('❌ No user returned from IBM App ID:', info);
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=no_user`);
+      return res.redirect(`${frontendUrl}/login?error=no_user`);
     }
 
     req.logIn(user, (err) => {
@@ -23,8 +26,6 @@ router.get('/callback', (req, res, next) => {
         return next(err);
       }
       
-      // Success! Redirect to frontend
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       console.log('✅ Auth Successful. Redirecting to:', frontendUrl);
       res.redirect(frontendUrl);
     });
@@ -35,7 +36,7 @@ router.get('/callback', (req, res, next) => {
 router.get('/logout', (req, res, next) => {
   req.logout((err) => {
     if (err) return next(err);
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = process.env.FRONTEND_URL || 'https://blog-pg57fwahn-girishkumar18983s-projects.vercel.app';
     res.redirect(frontendUrl);
   });
 });
