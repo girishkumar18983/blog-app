@@ -33,6 +33,7 @@ if (!fs.existsSync(uploadsDir)) {
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
+  'https://girishjha.vercel.app',
   'https://blog-pg57fwahn-girishkumar18983s-projects.vercel.app',
   process.env.FRONTEND_URL
 ].filter(Boolean);
