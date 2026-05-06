@@ -112,17 +112,6 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/upload', uploadRoutes);
 
-// Dashboard route for post-login landing
-app.get('/dashboard', (req, res) => {
-  if (req.isAuthenticated()) {
-    // In production, redirect to the frontend app
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    res.redirect(frontendUrl);
-  } else {
-    res.redirect('/api/auth/login');
-  }
-});
-
 // Health check
 app.get('/', (req, res) => {
   res.json({ message: 'Blog API is running' });

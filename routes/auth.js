@@ -6,10 +6,30 @@ const passport = require('passport');
 router.get('/login', passport.authenticate('appid'));
 
 // GET /api/auth/callback — IBM App ID Callback
-router.get('/callback', passport.authenticate('appid', { 
-  successRedirect: '/dashboard', 
-  failureRedirect: '/' 
-}));
+router.get('/callback', (req, res, next) => {
+  passport.authenticate('appid', (err, user, info) => {
+    if (err) {
+      console.error('❌ Passport Auth Error:', err);
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=auth_failed`);
+    }
+    if (!user) {
+      console.error('❌ No user returned from IBM App ID:', info);
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=no_user`);
+    }
+
+    req.logIn(user, (err) => {
+      if (err) {
+        console.error('❌ Login Session Error:', err);
+        return next(err);
+      }
+      
+      // Success! Redirect to frontend
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      console.log('✅ Auth Successful. Redirecting to:', frontendUrl);
+      res.redirect(frontendUrl);
+    });
+  })(req, res, next);
+});
 
 // GET /api/auth/logout — Logout
 router.get('/logout', (req, res, next) => {
