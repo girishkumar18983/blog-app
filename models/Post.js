@@ -1,5 +1,46 @@
 const mongoose = require('mongoose');
 
+// Reply subdocument schema (for threaded comments)
+const replySchema = new mongoose.Schema({
+  author: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+  text: {
+    type: String,
+    required: [true, 'Reply text is required'],
+    trim: true,
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+});
+
+// Comment subdocument schema
+const commentSchema = new mongoose.Schema({
+  author: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+  text: {
+    type: String,
+    required: [true, 'Comment text is required'],
+    trim: true,
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+  updatedAt: {
+    type: Date,
+  },
+  // Nested replies for threaded comments
+  replies: [replySchema],
+});
+
 const postSchema = new mongoose.Schema(
   {
     title: {
@@ -12,9 +53,16 @@ const postSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Content is required'],
     },
+    // Author as ObjectId reference to User
     author: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: [true, 'Author is required'],
+    },
+    // Category for filtering
+    category: {
       type: String,
-      required: [true, 'Author name is required'],
+      default: 'General',
       trim: true,
     },
     tags: {
@@ -29,21 +77,22 @@ const postSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
-    likes: {
-      type: [String],
-      default: [],
-    },
-    comments: [
+    // Likes as ObjectId references to User
+    likes: [
       {
-        text: { type: String, required: true },
-        author: { type: String, required: true },
-        createdAt: { type: Date, default: Date.now },
-      }
-    ]
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+    // Threaded comments
+    comments: [commentSchema],
   },
   {
     timestamps: true,
   }
 );
+
+// Text index for full-text search on title, content, and tags
+postSchema.index({ title: 'text', content: 'text', tags: 'text' });
 
 module.exports = mongoose.model('Post', postSchema);

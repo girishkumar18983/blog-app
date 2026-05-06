@@ -28,6 +28,19 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    // User role for authorization
+    role: {
+      type: String,
+      enum: ['reader', 'author', 'admin'],
+      default: 'author',
+    },
+    // Bookmarked posts
+    bookmarks: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Post',
+      },
+    ],
     friends: [
       {
         type: mongoose.Schema.Types.ObjectId,

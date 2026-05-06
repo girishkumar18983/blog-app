@@ -6,7 +6,7 @@ function Footer() {
       <div className="footer-inner">
         <div className="footer-credits">
           <HiOutlineCodeBracket className="footer-icon" />
-          <span>Created by <span className="footer-author">Girish Jha & Raghav Gupta</span></span>
+          <span>Created by <span className="footer-author">Girish Jha</span></span>
         </div>
         <div className="footer-contact">
           <HiOutlineEnvelope className="footer-icon" />

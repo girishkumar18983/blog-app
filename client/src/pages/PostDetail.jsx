@@ -1,10 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { fetchPost, deletePost, toggleLike, addComment } from '../api/posts';
+import { fetchPost, deletePost, toggleLike, addComment, editComment, deleteComment, addReply, bookmarkPost } from '../api/posts';
+import { fetchUserProfile } from '../api/users';
 import { summarizePost } from '../api/ai';
 import TagInfoModal from '../components/TagInfoModal';
 import { useAuth } from '../context/AuthContext';
-import { HiOutlineArrowLeft, HiOutlinePencil, HiOutlineTrash, HiOutlineUser, HiOutlineCalendar, HiOutlineEye, HiOutlineHeart, HiHeart, HiOutlineShare, HiOutlineChatBubbleBottomCenterText } from 'react-icons/hi2';
+import { 
+  HiOutlineArrowLeft, HiOutlinePencil, HiOutlineTrash, HiOutlineUser, 
+  HiOutlineCalendar, HiOutlineEye, HiOutlineHeart, HiHeart, 
+  HiOutlineShare, HiOutlineChatBubbleBottomCenterText, HiOutlineBookmark, HiBookmark 
+} from 'react-icons/hi2';
+import axios from 'axios';
 
 function PostDetail() {
   const { id } = useParams();
@@ -20,6 +26,17 @@ function PostDetail() {
   const [isCommenting, setIsCommenting] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [aiSummary, setAiSummary] = useState(null);
+  const [isBookmarked, setIsBookmarked] = useState(false);
+  const [isBookmarking, setIsBookmarking] = useState(false);
+
+  // Comment editing state
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editCommentText, setEditCommentText] = useState('');
+
+  // Reply state
+  const [replyingToId, setReplyingToId] = useState(null);
+  const [replyText, setReplyText] = useState('');
+  const [isReplying, setIsReplying] = useState(false);
 
   useEffect(() => {
     const loadPost = async () => {
@@ -34,6 +51,40 @@ function PostDetail() {
     };
     loadPost();
   }, [id, navigate]);
+
+  // Check if post is bookmarked
+  useEffect(() => {
+    const checkBookmark = async () => {
+      if (!user) return;
+      try {
+        const { data } = await fetchUserProfile(user._id);
+        setIsBookmarked(data.bookmarks?.includes(id) || false);
+      } catch (err) {
+        // Silently fail
+      }
+    };
+    checkBookmark();
+  }, [user, id]);
+
+  const getAuthorName = () => {
+    if (!post?.author) return 'Anonymous';
+    if (typeof post.author === 'object') return post.author.username || 'Anonymous';
+    return post.author;
+  };
+
+  const isPostOwner = () => {
+    if (!user || !post?.author) return false;
+    const authorId = typeof post.author === 'object' ? post.author._id : post.author;
+    return authorId === user._id || user.role === 'admin';
+  };
+
+  const isLiked = () => {
+    if (!user || !post?.likes) return false;
+    return post.likes.some((l) => {
+      const likeId = typeof l === 'object' ? l._id || l : l;
+      return likeId?.toString() === user._id?.toString();
+    });
+  };
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -51,12 +102,27 @@ function PostDetail() {
     if (isLiking) return;
     setIsLiking(true);
     try {
-      const { data } = await toggleLike(id, user.username);
-      setPost({ ...post, likes: data.likes });
+      const { data } = await toggleLike(id);
+      // Update likes array with raw IDs from response
+      setPost((prev) => ({ ...prev, likes: data.likes }));
     } catch (err) {
       console.error(err);
     } finally {
       setIsLiking(false);
+    }
+  };
+
+  const handleBookmark = async () => {
+    if (!user) return alert('Please login to bookmark this post.');
+    if (isBookmarking) return;
+    setIsBookmarking(true);
+    try {
+      await bookmarkPost(id);
+      setIsBookmarked(!isBookmarked);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsBookmarking(false);
     }
   };
 
@@ -71,13 +137,50 @@ function PostDetail() {
     if (!commentText.trim()) return;
     setIsCommenting(true);
     try {
-      const { data } = await addComment(id, { text: commentText, author: user.username });
+      const { data } = await addComment(id, { text: commentText });
       setPost({ ...post, comments: data });
       setCommentText('');
     } catch (err) {
       console.error(err);
     } finally {
       setIsCommenting(false);
+    }
+  };
+
+  const handleEditComment = async (commentId) => {
+    if (!editCommentText.trim()) return;
+    try {
+      const { data } = await editComment(id, commentId, { text: editCommentText });
+      setPost({ ...post, comments: data });
+      setEditingCommentId(null);
+      setEditCommentText('');
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteComment = async (commentId) => {
+    if (!confirm('Delete this comment?')) return;
+    try {
+      const { data } = await deleteComment(id, commentId);
+      setPost({ ...post, comments: data });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleReply = async (commentId) => {
+    if (!replyText.trim()) return;
+    setIsReplying(true);
+    try {
+      const { data } = await addReply(id, commentId, { text: replyText });
+      setPost({ ...post, comments: data });
+      setReplyingToId(null);
+      setReplyText('');
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsReplying(false);
     }
   };
 
@@ -104,6 +207,18 @@ function PostDetail() {
     });
   };
 
+  const getCommentAuthorName = (comment) => {
+    if (!comment?.author) return 'Anonymous';
+    if (typeof comment.author === 'object') return comment.author.username || 'Anonymous';
+    return comment.author;
+  };
+
+  const isCommentOwner = (comment) => {
+    if (!user || !comment?.author) return false;
+    const authorId = typeof comment.author === 'object' ? comment.author._id : comment.author;
+    return authorId === user._id;
+  };
+
   if (loading) {
     return (
       <div className="page-container">
@@ -114,6 +229,8 @@ function PostDetail() {
 
   if (!post) return null;
 
+  const authorName = getAuthorName();
+
   return (
     <div className="post-detail-container">
       <article className="post-detail" id="post-detail-page">
@@ -122,11 +239,15 @@ function PostDetail() {
             <HiOutlineArrowLeft /> Back
           </button>
           
+          {post.category && post.category !== 'General' && (
+            <span className="category-badge" style={{ marginBottom: '0.5rem' }}>{post.category}</span>
+          )}
+
           <h1 className="post-detail-title">{post.title}</h1>
           
           <div className="post-detail-meta">
             <span className="post-detail-meta-item">
-              <HiOutlineUser /> {post.author && typeof post.author === 'object' ? post.author.username : post.author || 'Anonymous'}
+              <HiOutlineUser /> {authorName}
             </span>
             <span className="post-detail-meta-item"><HiOutlineCalendar /> {formatDate(post.createdAt)}</span>
             <span className="post-detail-meta-item"><HiOutlineEye /> {post.views || 0} views</span>
@@ -189,11 +310,16 @@ function PostDetail() {
           </div>
         )}
 
+        {/* Engagement bar */}
         <div className="engagement-bar">
           <div className="engagement-buttons">
-            <button className={`btn-mini btn-like ${post.likes?.includes(user?.username) ? 'liked' : ''}`} onClick={handleLike} disabled={isLiking}>
-              {post.likes?.includes(user?.username) ? <HiHeart /> : <HiOutlineHeart />} 
+            <button className={`btn-mini btn-like ${isLiked() ? 'liked' : ''}`} onClick={handleLike} disabled={isLiking}>
+              {isLiked() ? <HiHeart /> : <HiOutlineHeart />} 
               {post.likes?.length || 0} Likes
+            </button>
+            <button className={`btn-mini btn-bookmark ${isBookmarked ? 'bookmarked' : ''}`} onClick={handleBookmark} disabled={isBookmarking}>
+              {isBookmarked ? <HiBookmark /> : <HiOutlineBookmark />}
+              {isBookmarked ? 'Saved' : 'Save'}
             </button>
             <button className="btn-mini btn-share" onClick={handleShare}>
               <HiOutlineShare /> Share
@@ -201,15 +327,19 @@ function PostDetail() {
           </div>
         </div>
 
-        <div className="post-detail-actions">
-          <Link to={`/edit/${post._id}`} className="btn-mini" id="btn-edit-post">
-            <HiOutlinePencil /> Edit Post
-          </Link>
-          <button className="btn-mini btn-mini-danger" onClick={() => setShowDeleteModal(true)} id="btn-delete-post">
-            <HiOutlineTrash /> Delete Post
-          </button>
-        </div>
+        {/* Post actions — only for owner/admin */}
+        {isPostOwner() && (
+          <div className="post-detail-actions">
+            <Link to={`/edit/${post._id}`} className="btn-mini" id="btn-edit-post">
+              <HiOutlinePencil /> Edit Post
+            </Link>
+            <button className="btn-mini btn-mini-danger" onClick={() => setShowDeleteModal(true)} id="btn-delete-post">
+              <HiOutlineTrash /> Delete Post
+            </button>
+          </div>
+        )}
 
+        {/* Comments Section */}
         <div className="comments-section">
           <div className="section-header" style={{ marginBottom: '1.5rem' }}>
             <h3 className="section-title"><HiOutlineChatBubbleBottomCenterText /> Comments ({post.comments?.length || 0})</h3>
@@ -231,15 +361,91 @@ function PostDetail() {
 
           <div className="comments-list">
             {post.comments && post.comments.length > 0 ? (
-              post.comments.slice().reverse().map((comment, i) => (
-                <div key={i} className="comment-card">
-                  <div className="comment-header">
-                    <span className="comment-author">{comment.author}</span>
-                    <span className="comment-date">{formatDate(comment.createdAt)}</span>
+              post.comments.slice().reverse().map((comment) => {
+                const cAuthor = getCommentAuthorName(comment);
+                const cOwner = isCommentOwner(comment);
+                return (
+                  <div key={comment._id} className="comment-card">
+                    <div className="comment-header">
+                      <span className="comment-author">{cAuthor}</span>
+                      <span className="comment-date">
+                        {formatDate(comment.createdAt)}
+                        {comment.updatedAt && <span className="comment-edited"> (edited)</span>}
+                      </span>
+                    </div>
+
+                    {editingCommentId === comment._id ? (
+                      <div className="comment-edit-form">
+                        <textarea
+                          className="form-textarea"
+                          value={editCommentText}
+                          onChange={(e) => setEditCommentText(e.target.value)}
+                          style={{ minHeight: '60px' }}
+                        />
+                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                          <button className="btn-mini" onClick={() => handleEditComment(comment._id)}>Save</button>
+                          <button className="btn-mini btn-mini-danger" onClick={() => { setEditingCommentId(null); setEditCommentText(''); }}>Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="comment-text">{comment.text}</p>
+                    )}
+
+                    {/* Comment action buttons */}
+                    <div className="comment-actions">
+                      {user && (
+                        <button className="comment-action-btn" onClick={() => { setReplyingToId(replyingToId === comment._id ? null : comment._id); setReplyText(''); }}>
+                          ↩️ Reply
+                        </button>
+                      )}
+                      {cOwner && editingCommentId !== comment._id && (
+                        <>
+                          <button className="comment-action-btn" onClick={() => { setEditingCommentId(comment._id); setEditCommentText(comment.text); }}>
+                            ✏️ Edit
+                          </button>
+                          <button className="comment-action-btn comment-action-delete" onClick={() => handleDeleteComment(comment._id)}>
+                            🗑️ Delete
+                          </button>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Reply form */}
+                    {replyingToId === comment._id && (
+                      <div className="reply-form">
+                        <textarea
+                          className="form-textarea"
+                          placeholder={`Reply to ${cAuthor}...`}
+                          value={replyText}
+                          onChange={(e) => setReplyText(e.target.value)}
+                          style={{ minHeight: '60px' }}
+                        />
+                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                          <button className="btn-mini" onClick={() => handleReply(comment._id)} disabled={isReplying || !replyText.trim()}>
+                            {isReplying ? 'Posting...' : 'Reply'}
+                          </button>
+                          <button className="btn-mini btn-mini-danger" onClick={() => setReplyingToId(null)}>Cancel</button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Nested replies */}
+                    {comment.replies && comment.replies.length > 0 && (
+                      <div className="replies-list">
+                        {comment.replies.map((reply) => (
+                          <div key={reply._id} className="reply-card">
+                            <div className="comment-header">
+                              <span className="comment-author">{getCommentAuthorName(reply)}</span>
+                              <span className="comment-date">{formatDate(reply.createdAt)}</span>
+                            </div>
+                            <p className="comment-text">{reply.text}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <p className="comment-text">{comment.text}</p>
-                </div>
-              ))
+                );
+              })
             ) : (
               <p className="no-comments-text">No comments yet. Be the first to share your thoughts!</p>
             )}
@@ -247,6 +453,7 @@ function PostDetail() {
         </div>
       </article>
 
+      {/* Delete Modal */}
       {showDeleteModal && (
         <div className="modal-overlay" onClick={() => setShowDeleteModal(false)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>

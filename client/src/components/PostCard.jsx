@@ -15,6 +15,13 @@ function PostCard({ post, onTagClick }) {
     });
   };
 
+  // Get author display name — handles both populated object and string
+  const getAuthorName = () => {
+    if (!post.author) return 'Anonymous';
+    if (typeof post.author === 'object') return post.author.username || 'Anonymous';
+    return post.author;
+  };
+
   const getInitials = (name) => {
     if (!name || typeof name !== 'string') return '??';
     return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
@@ -26,6 +33,8 @@ function PostCard({ post, onTagClick }) {
     return content.substring(0, maxLen).trim() + '...';
   };
 
+  const authorName = getAuthorName();
+
   return (
     <article className="post-card" id={`post-card-${post._id}`} onClick={() => navigate(`/post/${post._id}`)}>
       {post.coverImage ? (
@@ -34,6 +43,10 @@ function PostCard({ post, onTagClick }) {
         <div className="post-card-image-placeholder"><HiOutlineDocumentText /></div>
       )}
       <div className="post-card-body">
+        {/* Category badge */}
+        {post.category && post.category !== 'General' && (
+          <span className="category-badge">{post.category}</span>
+        )}
         {Array.isArray(post.tags) && post.tags.length > 0 && (
           <div className="post-card-tags">
             {post.tags.slice(0, 3).map((tag, i) => (
@@ -55,9 +68,9 @@ function PostCard({ post, onTagClick }) {
         <div className="post-card-footer">
           <div className="post-card-author">
             <div className="post-card-author-avatar">
-              {getInitials(post.author && typeof post.author === 'object' ? post.author.username : post.author || 'Anonymous')}
+              {getInitials(authorName)}
             </div>
-            <span>{post.author && typeof post.author === 'object' ? post.author.username : post.author || 'Anonymous'}</span>
+            <span>{authorName}</span>
           </div>
           <div className="post-card-stats">
             <span className="post-card-date">{formatDate(post.createdAt)}</span>

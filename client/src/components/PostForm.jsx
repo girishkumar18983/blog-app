@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { suggestTitles } from '../api/ai';
+import { uploadImage } from '../api/posts';
+
+const CATEGORIES = ['General', 'Technology', 'Lifestyle', 'Travel', 'Food', 'Health', 'Education', 'Business', 'Entertainment', 'Science'];
 
 function PostForm({ initialData, onSubmit, isEdit }) {
   const navigate = useNavigate();
@@ -9,45 +12,59 @@ function PostForm({ initialData, onSubmit, isEdit }) {
   const [form, setForm] = useState({ 
     title: '', 
     content: '', 
-    author: user?.username || '', 
     tags: '', 
-    coverImage: '' 
+    coverImage: '',
+    category: 'General',
   });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState([]);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (initialData) {
       setForm({
         title: initialData.title || '',
         content: initialData.content || '',
-        author: initialData.author || '',
         tags: initialData.tags ? initialData.tags.join(', ') : '',
         coverImage: initialData.coverImage || '',
+        category: initialData.category || 'General',
       });
-    } else if (user && !isEdit && !form.author) {
-      setForm(prev => ({ ...prev, author: user.username }));
     }
-  }, [initialData, user, isEdit, form.author]);
+  }, [initialData]);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setError('Image size should be less than 5MB');
-        return;
-      }
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image size should be less than 5MB');
+      return;
+    }
+
+    // Try Multer upload first, fall back to base64
+    setUploading(true);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      const { data } = await uploadImage(formData);
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      setForm((prev) => ({ ...prev, coverImage: `${API_URL}${data.url}` }));
+    } catch (err) {
+      // Fallback to base64
       const reader = new FileReader();
       reader.onloadend = () => {
-        setForm({ ...form, coverImage: reader.result });
+        setForm((prev) => ({ ...prev, coverImage: reader.result }));
       };
       reader.readAsDataURL(file);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -81,8 +98,8 @@ function PostForm({ initialData, onSubmit, isEdit }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!form.title.trim() || !form.content.trim() || !form.author.trim()) {
-      setError('Title, content, and author are required.');
+    if (!form.title.trim() || !form.content.trim()) {
+      setError('Title and content are required.');
       return;
     }
     setSubmitting(true);
@@ -90,9 +107,9 @@ function PostForm({ initialData, onSubmit, isEdit }) {
       const postData = {
         title: form.title.trim(),
         content: form.content.trim(),
-        author: form.author.trim(),
         tags: form.tags ? form.tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
         coverImage: form.coverImage,
+        category: form.category || 'General',
       };
       await onSubmit(postData);
     } catch (err) {
@@ -151,6 +168,16 @@ function PostForm({ initialData, onSubmit, isEdit }) {
         <textarea className="form-textarea" id="content" name="content" value={form.content} onChange={handleChange} placeholder="Write your blog post content..." />
       </div>
 
+      {/* Category selector */}
+      <div className="form-group">
+        <label className="form-label" htmlFor="category">Category</label>
+        <select className="form-input" id="category" name="category" value={form.category} onChange={handleChange}>
+          {CATEGORIES.map((cat) => (
+            <option key={cat} value={cat}>{cat}</option>
+          ))}
+        </select>
+      </div>
+
       <div className="form-group">
         <label className="form-label" htmlFor="tags">Tags</label>
         <input className="form-input" id="tags" name="tags" value={form.tags} onChange={handleChange} placeholder="react, javascript, web dev" />
@@ -168,22 +195,22 @@ function PostForm({ initialData, onSubmit, isEdit }) {
             </div>
           ) : (
             <label className="file-upload-label">
-              <div className="upload-icon">📷</div>
-              <span>Click to upload image or drag and drop</span>
+              <div className="upload-icon">{uploading ? '⏳' : '📷'}</div>
+              <span>{uploading ? 'Uploading...' : 'Click to upload image or drag and drop'}</span>
               <p>JPG, PNG, WebP (Max 5MB)</p>
-              <input type="file" className="file-input-hidden" accept="image/*" onChange={handleFileChange} />
+              <input type="file" className="file-input-hidden" accept="image/*" onChange={handleFileChange} disabled={uploading} />
             </label>
           )}
         </div>
 
         <div style={{ marginTop: '1rem' }}>
           <label className="form-label" htmlFor="coverImage">Or use Image URL</label>
-          <input className="form-input" id="coverImage" name="coverImage" value={form.coverImage.startsWith('data:') ? '' : form.coverImage} onChange={handleChange} placeholder="https://example.com/image.jpg" />
+          <input className="form-input" id="coverImage" name="coverImage" value={form.coverImage.startsWith('data:') || form.coverImage.includes('/uploads/') ? '' : form.coverImage} onChange={handleChange} placeholder="https://example.com/image.jpg" />
         </div>
       </div>
 
       <div className="form-actions">
-        <button type="submit" className="btn btn-primary btn-lg" disabled={submitting} id="btn-submit-post">
+        <button type="submit" className="btn btn-primary btn-lg" disabled={submitting || uploading} id="btn-submit-post">
           {submitting ? 'Saving...' : isEdit ? 'Update Post' : 'Publish Post'}
         </button>
         <button type="button" className="btn btn-secondary btn-lg" onClick={() => navigate(-1)}>Cancel</button>
